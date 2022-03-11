@@ -63,7 +63,7 @@ def amount_allocate(bill_no, driver_amount, driver2_amount, driver, driver2=None
                     assis3=None, assis4=None, assis5=None, assis6=None):
     # 参数类型/非空校验
     if not bill_no or not driver:
-        raise ValueError("Excel内容异常：单据号不能为空！")
+        raise ValueError("Excel内容异常：单据号/驾驶员不能为空！")
 
     if not driver_amount:
         raise ValueError("Excel内容异常：请检查单据号【%s】的场景是否存在，当前场景计算出的补贴金额=0！" % bill_no)
@@ -137,14 +137,15 @@ def amount_allocate(bill_no, driver_amount, driver2_amount, driver, driver2=None
     return allocate_result
 
 
-def data_deduplicate(data_frame):
+def data_filter_deduplicate(data_frame):
     '''一张单据号存在多条明细时，只取一条；
     一张单据号的客户名称可能同时包含葫芦娃和非葫芦娃，此时需要按葫芦娃统计
 
-    0. 客户名称处理：映射一个新列tmp，葫芦娃->1, 没有葫芦娃->0
+    1. 客户名称处理：映射一个新列tmp，葫芦娃->1, 没有葫芦娃->0
                 update 客户名称 where 单据号 in ( select 单据号 group by bill_no having sum(tmp)>=1 )
-    1. 整表去重
-    2. select 单据号 from xx group by 单据号 having count(1)>0，校验是否有1个单据号对应多条不同结果的记录，有则打印
+    2. 整表去重
+    3. select 单据号 from xx group by 单据号 having count(1)>0，校验是否有1个单据号对应多条不同结果的记录，有则打印
+    4. 过滤掉状态为未审核的记录，并打印出来
     '''
     try:
         # ====== [第一步] 客户名称处理 ======
@@ -170,6 +171,12 @@ def data_deduplicate(data_frame):
             tmp = key_cnt[key_cnt > 1]  # 返回的是Series列表，直接打印的话最底下有一行name/dtype影响阅读
             tmp_res = pd.DataFrame({'单据号': tmp.index, '派送次数': tmp.values})  # 因此转成dataframe, 给size列增加名字
             print("Excel内容异常：如下单据号可能存在多条派送记录，请检查！\n%s" % tmp_res.to_string(index=False))  # 打印时去掉最左侧的默认索引0123
+        # ====== [第四步] 过滤状态为未审核的记录 ======
+        filter_3 = data_frame['状态'] != "已审核"
+        if len(filter_3):
+            tmp_res = data_frame[filter_3][["单据号", "状态"]]
+            print("Excel内容异常：如下单据号非【已审核】，补贴金额统计为0！\n%s" % tmp_res.to_string(index=False))  # 打印时去掉最左侧的默认索引0123
+        data_frame = data_frame[data_frame['状态'] == "已审核"]
     except:
         print("Something error: ", traceback.format_exc())
     finally:
@@ -185,11 +192,12 @@ def main(rule_file, data_file, result_file):
         .to_dict(orient="records")
 
     drive_bill_raw = pd.read_excel(data_file,
-                                   usecols=["单据号", "车牌号", "客户名称", "驾驶员2", "送书重量", "回头车拉货", "驾驶员",
+                                   usecols=["状态", "单据号", "车牌号", "客户名称", "驾驶员2", "送书重量", "回头车拉货", "驾驶员",
                                             "跟车员1", "跟车员2", "跟车员3", "跟车员4", "跟车员5", "跟车员6"],
                                    dtype={"送书重量": float}
                                    ).dropna(subset=["车牌号"]).fillna({"送书重量": 0}).fillna("")
-    drive_bill = data_deduplicate(data_frame=drive_bill_raw).to_dict(orient="records")
+
+    drive_bill = data_filter_deduplicate(data_frame=drive_bill_raw).to_dict(orient="records")
 
     final_result_list = []
     for data in drive_bill:
