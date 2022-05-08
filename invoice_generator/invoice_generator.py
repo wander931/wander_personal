@@ -14,43 +14,20 @@
     3. 合同编号:送货单 = n:n，即一个合同可以分布在多个送货单中，一个送货单也可以包含多个合同编号
 
 思路：
-    1. 计算sum(金额)，判断最少要有多少张发票，发票数n>=ceil(sum(gmv))，即最少要组合成n张发票
-    2. for i in range(n,明细条数), 分析目标list切成i片的全部场景，遍历完组合出x种场景，场景按发票数从少到多排序
-    3. 遍历上述场景，过滤掉不符合规则的
-        1. 总金额<=10w
+    1. 从送货明细表提取出送货单维度的明细，一个送货单一张表，按送货单的金额从大到小排序
+    2. 取第0位为主key, 再遍历1以后的送货单，0+1+2+3...直到不满足规则的时候停止循环，取上一组排列，并把刚刚取到的结果(如0+3+4)从送货表剔除
+    3. 以此类推，新表从0位开始取，一直往后加
+    4. 不满足规则的条件
+        1. 总金额99000<x<=10w，偏差1000一档？
         2. 4个号的列表，去重后长度<=16
-    4. 取到满足的就返回，后面的场景可以不用遍历了
-
-
-            合同号     单据号     OA号     SAP号       金额
-=========================================================
-送货单①        A        A1         A        A         5w
-              A        A2         A        A
-              B        B1         B        B
-=========================================================
-送货单②        A        A3         A        A         4w
-              C        C1         C        C
-              C        C2         C        C
-=========================================================
-送货单③        B        B2        B         B         2w
-              C        C3        C         C
-
-
-测试excel中，一共8个送货单(单据号这一列是送货单)，17条明细, 其中1条未审核
-
-
 """
 
 from __future__ import unicode_literals
 import pandas as pd
-import numpy as np
-import math
 import time
 import os
 import sys
 import re
-import traceback
-from more_itertools import set_partitions
 
 dir = os.path.abspath(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(dir)
@@ -142,14 +119,16 @@ def get_delivery_info(data_file):
         info_groupby_deliver_no_dic[info["送货单号"]]["单据号"] += OA_no
         info_groupby_deliver_no_dic[info["送货单号"]]["单据号"] += SAP_no
 
-    # info_groupby_deliver_no_dic转成有序的列表
-    info_groupby_deliver_no = [{"送货单号": k, "金额": v["金额"], "单据号": v["单据号"]} for k, v in info_groupby_deliver_no_dic.items() ]
+    # info_groupby_deliver_no_dic转成有序的列表，并按金额从大到小排序
+    info_groupby_deliver_no = [{"送货单号": k, "金额": v["金额"], "单据号": v["单据号"]} for k, v in info_groupby_deliver_no_dic.items()]
+    info_groupby_deliver_no = sorted(info_groupby_deliver_no, key=lambda d: d['金额'])
+    info_groupby_deliver_no.reverse()
 
     return delivery_info_list, info_groupby_deliver_no
 
 
-def validate_invoice(delivery_info_list, invoice_group):
-    """ 校验发票是否成立：传入(精简版)发货清单，以及分组的详情如[[0], [1,2], [3,4,5]]；组内的数字对应list的索引
+def validate_invoice(delivery_info_list):
+    """ 校验发票是否成立
     返回True或者False
 
     规则1: 单张印刷清单的总金额<=10w
@@ -161,87 +140,101 @@ def validate_invoice(delivery_info_list, invoice_group):
     2. group list中，每个子列表的4个单号去重后的个数<=16
     3. 一个送货单号不能同时出现在多个子列表里
     """
-    flag = 0
+    invoice_total_gmv = 0
+    invoice_total_bill_no = []
+    for i in delivery_info_list:
+        invoice_total_gmv += float(i["金额"])
+        invoice_total_bill_no += list(i["单据号"])
 
-    for single_invoice in invoice_group:
-        invoice_total_gmv = 0
-        invoice_total_bill_no = []
-        for i in single_invoice:
-            invoice_total_gmv += float(delivery_info_list[i]["金额"])
-            invoice_total_bill_no += list(delivery_info_list[i]["单据号"])
-
-        # 规则1，group list中，每个子列表的总金额<=10w
-        # 规则2，每个子列表的4个单号去重后的个数<=16
-        if invoice_total_gmv > 100000 or len(set(invoice_total_bill_no)) > 16:
-            flag += 1
-
-
-        print(invoice_total_gmv, len(set(invoice_total_bill_no)))
-        print("time: ", time.strftime('%Y%m%d_%H_%M_%S', time.localtime(int(time.time()))),"\n\n")
-
-    if flag == 0:
-        return True
-    else:
+    # 规则1，group list中，每个子列表的总金额<=10w
+    # 规则2，每个子列表的4个单号去重后的个数<=16
+    if invoice_total_gmv > 100000 or len(set(invoice_total_bill_no)) > 16:
         return False
+    else:
+        return True
 
 
 def get_valid_group(info_groupby_deliver_no):
-    """从partion最少开始，找到一个可用的场景即返回"""
-    delivery_total_gmv = sum([float(i["金额"]) for i in info_groupby_deliver_no])
-    min_partition = math.ceil(delivery_total_gmv / 100000)
-    max_partition = len(info_groupby_deliver_no)
-
-    for partition in range(min_partition, max_partition):
-        print("time: ", time.strftime('%Y%m%d_%H_%M_%S', time.localtime(int(time.time()))), "\n\n")
-        for group in set_partitions([i for i in range(max_partition)], k=partition):
-            print("time: ", time.strftime('%Y%m%d_%H_%M_%S', time.localtime(int(time.time()))), "\n\n")
-            print(group)
-            if validate_invoice(info_groupby_deliver_no, group):
-                print("success")
-                print(group)
-                return group
+    """
+    1. 从送货明细表提取出送货单维度的明细，一个送货单一张表，按送货单的金额从大到小排序
+    2. 取第0位为主key, 再遍历1以后的送货单，0+1+2+3...直到不满足规则的时候停止循环，取上一组排列，并把刚刚取到的结果(如0+3+4)从送货表剔除
+    3. 以此类推，新表从0位开始取，一直往后加
+    4. 不满足规则的条件
+        1. 总金额99000<x<=10w，偏差1000一档？
+        2. 4个号的列表，去重后长度<=16
+    """
+    invoice_groups = []
+    while info_groupby_deliver_no:
+        # 先把第0位取出来，同时在原列表中把该元素删掉
+        group = [info_groupby_deliver_no[0]]
+        info_groupby_deliver_no.remove(group[0])
+        # 遍历删掉0位后的列表，满足条件的元素也从里面删掉
+        for i in info_groupby_deliver_no:
+            if validate_invoice(group + [i]):
+                group += [i]
+                info_groupby_deliver_no.remove(i)
+        invoice_groups.append(group)
+    return invoice_groups
 
 
 def main(data_file, result_file):
     delivery_info_list, info_groupby_deliver_no = get_delivery_info(data_file)
-    # print(delivery_info_list, info_groupby_deliver_no)
 
+    invoice_groups = get_valid_group(info_groupby_deliver_no)
+    invoice_dataframe_list = []
+    # 每个元素是一张发票，每张发票中包含多个单据号[{"单据号"：1}, {"单据号"：2}]
+    for invoice in invoice_groups:
+        # invoice = invoice_groups[idx]
+        final_result_list = []
+        for each in invoice:
+            deliver_no = each["送货单号"]
+            contract_no = []
+            bill_no = []
+            OA_no = []
+            SAP_no = []
+            # 根据单据号从原送货明细表中取明细，写进final result中
+            for info in delivery_info_list:
+                if info["送货单号"] == deliver_no:
+                    tmp = {"工程号": info["工程号"],
+                           "品名": info["产品名称"],
+                           "规格": info["产品规格"],
+                           "数量": info["数量"],
+                           "单位": info["单位"],
+                           "单价(元)": info["单价"],
+                           "金额(元)": info["金额"],
+                           "备注": ""
+                           }
+                    final_result_list.append(tmp)
+                    contract_no += info["合同编号"]
+                    bill_no += info["单据号"]
+                    OA_no += info["OA单号"]
+                    SAP_no += info["SAP订单号"]
+            comment = """合同编号：
+%s
+单据号：
+%s
+OA单号：
+%s
+SAP订单号：
+%s""" % ("\n".join(str(i) for i in set(contract_no)),
+         "\n".join(str(i) for i in set(bill_no)),
+         "\n".join(str(i) for i in set(OA_no)),
+         "\n".join(str(i) for i in set(SAP_no)),
+         )
+        final_result_list[0]["备注"] = comment
+        invoice_dataframe_list.append(pd.DataFrame(final_result_list))
 
-    final_invoice_group = get_valid_group(info_groupby_deliver_no)
-
-    print(final_invoice_group)
-
-    # final_result = pd.DataFrame(final_result_list)
-    # grouped = final_result.groupby("姓名").agg({"补贴金额": "sum"})
-    #
-    # with pd.ExcelWriter(result_file) as writer:
-    #     final_result.to_excel(writer, sheet_name='补贴明细', index=False)
-    #     grouped.to_excel(writer, sheet_name='金额合计')
-    #
-
-
-def debug():
-    x = []
-    min_partitions = 3
-    max_partitions = 10
-    for partition in range(1,3):
-        x += list(set_partitions([i for i in range(15)], k=partition))
-
-    print(x)
-    print(len(x))
-
-    # test = """（125*52*60mm）盒子的物料编号:80011443;合同编号:2022021610503;单据号:2240002224、220002274;OA单号:2150003098 ; SAP订单号:4100006586。（115*52*60mm）盒子物料编号:10001517;合同编号:2022021610503;计划号:3240002224，320002274;OA单号:2150003098 ; SAP订单号:4100006586。。"""
-    # contract_no = re.findall(r'(?:计划号|单据号).+?([0-9、，, ]{5,25})', test)
-    # # contract_no = re.findall(r'合同编号.+?([0-9、，, ]{5,25})', test)
-    # print(contract_no)
-
+    with pd.ExcelWriter(result_file) as writer:
+        for idx in range(len(invoice_dataframe_list)):
+            invoice_dataframe_list[idx].to_excel(writer, sheet_name='发票_%s' % idx, index=False)
 
 
 if __name__ == "__main__":
     now = time.strftime('%Y%m%d_%H_%M_%S', time.localtime(int(time.time())))
 
     data_file = dir + r'/送货单明细.xlsx'
-    result_file = dir + r'/印刷清单_%s.xlsx' % now
+    result_file = dir + r'/印刷清单.xlsx'
 
     main(data_file, result_file)
-    # debug()
+    print("\n计算完成，结果见文件【%s】\n弹窗1分钟后自动关闭，也可手动关闭~" % result_file)
+    time.sleep(60)
