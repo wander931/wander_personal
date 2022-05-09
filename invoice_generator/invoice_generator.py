@@ -169,7 +169,7 @@ def get_valid_group(info_groupby_deliver_no):
         group = [info_groupby_deliver_no[0]]
         info_groupby_deliver_no.remove(group[0])
         # 遍历删掉0位后的列表，满足条件的元素也从里面删掉
-        for i in info_groupby_deliver_no:
+        for i in info_groupby_deliver_no[:]:
             if validate_invoice(group + [i]):
                 group += [i]
                 info_groupby_deliver_no.remove(i)
@@ -184,14 +184,13 @@ def main(data_file, result_file):
     invoice_dataframe_list = []
     # 每个元素是一张发票，每张发票中包含多个单据号[{"单据号"：1}, {"单据号"：2}]
     for invoice in invoice_groups:
-        # invoice = invoice_groups[idx]
         final_result_list = []
+        contract_no = []
+        bill_no = []
+        OA_no = []
+        SAP_no = []
         for each in invoice:
             deliver_no = each["送货单号"]
-            contract_no = []
-            bill_no = []
-            OA_no = []
-            SAP_no = []
             # 根据单据号从原送货明细表中取明细，写进final result中
             for info in delivery_info_list:
                 if info["送货单号"] == deliver_no:
