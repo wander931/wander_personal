@@ -173,7 +173,7 @@ def data_filter_deduplicate(data_frame):
             print("Excel内容异常：如下单据号可能存在多条派送记录，请检查！\n%s" % tmp_res.to_string(index=False))  # 打印时去掉最左侧的默认索引0123
         # ====== [第四步] 过滤状态为未审核的记录 ======
         filter_3 = data_frame['状态'] != "已审核"
-        if len(filter_3):
+        if len(data_frame[filter_3]):
             tmp_res = data_frame[filter_3][["单据号", "状态"]]
             print("Excel内容异常：如下单据号非【已审核】，补贴金额统计为0！\n%s" % tmp_res.to_string(index=False))  # 打印时去掉最左侧的默认索引0123
         data_frame = data_frame[data_frame['状态'] == "已审核"]
