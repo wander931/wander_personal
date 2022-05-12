@@ -232,7 +232,7 @@ if __name__ == "__main__":
     now = time.strftime('%Y%m%d_%H_%M_%S', time.localtime(int(time.time())))
 
     data_file = dir + r'/送货单明细.xlsx'
-    result_file = dir + r'/印刷清单.xlsx'
+    result_file = dir + r'/印刷清单_%s.xlsx' % now
 
     main(data_file, result_file)
     print("\n计算完成，结果见文件【%s】\n弹窗1分钟后自动关闭，也可手动关闭~" % result_file)
