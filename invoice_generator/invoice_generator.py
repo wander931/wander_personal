@@ -5,7 +5,7 @@
 业务规则：
     0. 过滤条件：客户名称="海南普利制药股份有限公司" and 状态="已审核"
     1. 单张印刷清单的总金额<=10w
-    2. 合同编号、单据号、OA单号、SAP单号，四个号的总条数不能超过16条
+    2. 合同编号、单据号、OA单号、SAP单号，四个号的总条数不能超过15条
     3. 一张送货单内的内容，只能出现在一个印刷清单中
 
 数据规则：
@@ -19,7 +19,7 @@
     3. 以此类推，新表从0位开始取，一直往后加
     4. 不满足规则的条件
         1. 总金额99000<x<=10w，偏差1000一档？
-        2. 4个号的列表，去重后长度<=16
+        2. 4个号的列表，去重后长度<=15
 """
 
 from __future__ import unicode_literals
@@ -132,12 +132,12 @@ def validate_invoice(delivery_info_list):
     返回True或者False
 
     规则1: 单张印刷清单的总金额<=10w
-    规则2. 合同编号、单据号、OA单号、SAP单号，四个号的总条数不能超过16条
+    规则2. 合同编号、单据号、OA单号、SAP单号，四个号的总条数不能超过15条
     规则3. 一张送货单内的内容，只能出现在一个印刷清单中
 
     即：
     1. group list中，每个子列表的总金额<=10w
-    2. group list中，每个子列表的4个单号去重后的个数<=16
+    2. group list中，每个子列表的4个单号去重后的个数<=15
     3. 一个送货单号不能同时出现在多个子列表里
     """
     invoice_total_gmv = 0
@@ -147,8 +147,8 @@ def validate_invoice(delivery_info_list):
         invoice_total_bill_no += list(i["单据号"])
 
     # 规则1，group list中，每个子列表的总金额<=10w
-    # 规则2，每个子列表的4个单号去重后的个数<=16
-    if invoice_total_gmv > 100000 or len(set(invoice_total_bill_no)) > 16:
+    # 规则2，每个子列表的4个单号去重后的个数<=15
+    if invoice_total_gmv > 100000 or len(set(invoice_total_bill_no)) > 15:
         return False
     else:
         return True
@@ -161,7 +161,7 @@ def get_valid_group(info_groupby_deliver_no):
     3. 以此类推，新表从0位开始取，一直往后加
     4. 不满足规则的条件
         1. 总金额99000<x<=10w，偏差1000一档？
-        2. 4个号的列表，去重后长度<=16
+        2. 4个号的列表，去重后长度<=15
     """
     invoice_groups = []
     while info_groupby_deliver_no:
