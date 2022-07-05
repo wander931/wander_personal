@@ -95,20 +95,20 @@ def get_delivery_info(data_file):
         info = delivery_info_list[i]
         comment = str(info["工单备注"])
 
-        contract_list = re.findall(r'合同编号.+?([0-9、，, ]{5,25})', comment)
+        contract_list = re.findall(r'合同编号.+?([0-9、，, ]{5,50})', comment)
         contract_no = get_pure_number_list(contract_list)
         delivery_info_list[i]["合同编号"] = contract_no
 
         # 单据号在备注里可能叫计划号，这里的(?:计划号|单据号)代表二选一匹配两个完整的词，但是最后选出的是后面括号中的数字；?:用来忽略本身的括号，以避免和后面真正要匹配的字符混淆
-        bill_list = re.findall(r'(?:计划号|单据号).+?([0-9、，, ]{5,25})', comment)
+        bill_list = re.findall(r'(?:计划号|单据号).+?([0-9、，, ]{5,100})', comment)
         bill_no = get_pure_number_list(bill_list)
         delivery_info_list[i]["单据号"] = bill_no
 
-        OA_list = re.findall(r'OA单号.+?([0-9、，, ]{5,25})', comment)
+        OA_list = re.findall(r'OA单号.+?([0-9、，, ]{5,50})', comment)
         OA_no = get_pure_number_list(OA_list)
         delivery_info_list[i]["OA单号"] = OA_no
 
-        SAP_list = re.findall(r'SAP订单号.+?([0-9、，, ]{5,25})', comment)
+        SAP_list = re.findall(r'SAP订单号.+?([0-9、，, ]{5,50})', comment)
         SAP_no = get_pure_number_list(SAP_list)
         delivery_info_list[i]["SAP订单号"] = SAP_no
 
@@ -148,7 +148,7 @@ def validate_invoice(delivery_info_list):
 
     # 规则1，group list中，每个子列表的总金额<=10w
     # 规则2，每个子列表的4个单号去重后的个数<=15
-    if invoice_total_gmv > 100000 or len(set(invoice_total_bill_no)) > 15:
+    if invoice_total_gmv > 90000 or len(set(invoice_total_bill_no)) > 15:
         return False
     else:
         return True
