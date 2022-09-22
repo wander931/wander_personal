@@ -40,10 +40,13 @@ def data_filter(data_frame):
     3. 备注中包含合同编号
     '''
     try:
-        data_frame = data_frame[(data_frame["状态"] == "已审核")
+        len_old =len(data_frame)
+        data_frame = data_frame[(data_frame["审核"] == "是")
                               & (data_frame["客户名称"] == "海南普利制药股份有限公司")
                               & (data_frame['工单备注'].str.contains(r".*合同编号.*"))
                     ]
+        if len_old-len(data_frame) > 0:
+            print("有%s条记录不符合规则(未审核/客户名称不匹配/工单备注为空)，已被过滤" % (len_old-len(data_frame)))
     except:
         pass
     finally:
@@ -69,21 +72,19 @@ def get_pure_number_list(raw_str_list):
 def get_delivery_info(data_file):
     # 默认读第一个sheet, header=0代表从第1行开始读, 读取指定列; 为空时指定字段用0填充，其他字段为空用""填充；最后转成key:value list
     delivery_info_raw = pd.read_excel(data_file,
-                                      # header=0,
-                                      usecols=["状态 ", "工程号", "单据号", "客户名称", "产品名称", "产品规格", "数量", "单位", "单价(本位币)",
-                                               "金额(本位币)", "工单备注"],
-                                      dtype={"数量": float, "单价(本位币)": float, "金额(本位币)": float}
-                                      ).dropna(subset=["单据号"])\
-        .fillna({"数量": 0, "单价(本位币)": 0, "金额(本位币)": 0}) \
+                                      header=1,
+                                      usecols=["审核", "工程号", "送货单号", "客户名称", "产品名称", "产品规格", "数量", "单位", "单价",
+                                               "金额", "工单备注"],
+                                      dtype={"数量": float, "单价": float, "金额": float}
+                                      ).dropna(subset=["送货单号"])\
+        .fillna({"数量": 0, "单价": 0, "金额": 0}) \
         .fillna("")
 
-    # 重命名列名
-    delivery_info_raw.rename(columns={'状态 ': '状态', '单据号': '送货单号', '金额(本位币)': '金额', '单价(本位币)': '单价'}, inplace=True) \
+    # # 重命名列名
+    # delivery_info_raw.rename(columns={'审核': '状态'}, inplace=True)
 
     # 过滤无效数据：客户名称!=普利的，状态!=已审核的，以及工单备注里不包含合同编号的
     delivery_info_list = data_filter(delivery_info_raw).to_dict(orient="records")
-    # print(delivery_info_raw)
-    # print(delivery_info_list)
 
     # 聚合一个以送货单为key的dict，后面用来判断规则用
     info_groupby_deliver_no_dic = {}
@@ -164,6 +165,8 @@ def get_valid_group(info_groupby_deliver_no):
         2. 4个号的列表，去重后长度<=15
     """
     invoice_groups = []
+    # print("info_groupby_deliver_no", info_groupby_deliver_no)
+
     while info_groupby_deliver_no:
         # 先把第0位取出来，同时在原列表中把该元素删掉
         group = [info_groupby_deliver_no[0]]
@@ -224,15 +227,39 @@ SAP订单号：
         invoice_dataframe_list.append(pd.DataFrame(final_result_list))
 
     with pd.ExcelWriter(result_file) as writer:
+        workbook = writer.book
+        # format详细文档见 https://xlsxwriter.readthedocs.io/format.html
+        merge_format = workbook.add_format({
+            'border': 1,
+            'align': 'center',
+            'valign': 'top'})
+        # 遍历不同的发票sheet
         for idx in range(len(invoice_dataframe_list)):
-            invoice_dataframe_list[idx].to_excel(writer, sheet_name='发票_%s' % idx, index=False)
+            df = invoice_dataframe_list[idx]
+            sheet_name = '发票_%s' % idx
+            worksheet = workbook.add_worksheet(sheet_name)
+            writer.sheets[sheet_name] = worksheet
+            # 写数据进对应的sheet
+            df.to_excel(writer, sheet_name=sheet_name, index=False)
+            # 合并备注列，第二个参数是合并后取哪个单元格的内容
+            worksheet.merge_range('H2:H21', invoice_dataframe_list[0].loc[0, '备注'], merge_format)
+            # 设置列宽
+            worksheet.set_column('B:B', 40)  # 品名
+            worksheet.set_column('H:H', 20)
+
+            # # 自动调整宽度
+            # for column in df:
+            #     column_length = max(df[column].astype(str).map(len).max(), len(column))
+            #     col_idx = df.columns.get_loc(column)
+            #     writer.sheets[sheet_name].set_column(col_idx, col_idx, column_length)
 
 
 if __name__ == "__main__":
-    now = time.strftime('%Y%m%d_%H_%M_%S', time.localtime(int(time.time())))
+    # now = time.strftime('%Y%m%d_%H_%M_%S', time.localtime(int(time.time())))
 
-    data_file = dir + r'/送货单明细.xlsx'
-    result_file = dir + r'/印刷清单_%s.xlsx' % now
+    data_file = dir + r'/销售对账明细.xlsx'
+    # result_file = dir + r'/印刷清单_%s.xlsx' % now
+    result_file = dir + r'/开票明细清单.xlsx'
 
     main(data_file, result_file)
     print("\n计算完成，结果见文件【%s】\n弹窗1分钟后自动关闭，也可手动关闭~" % result_file)
