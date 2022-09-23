@@ -255,11 +255,11 @@ SAP订单号：
 
 
 if __name__ == "__main__":
-    # now = time.strftime('%Y%m%d_%H_%M_%S', time.localtime(int(time.time())))
+    now = time.strftime('%Y%m%d_%H_%M_%S', time.localtime(int(time.time())))
 
     data_file = dir + r'/销售对账明细.xlsx'
     # result_file = dir + r'/印刷清单_%s.xlsx' % now
-    result_file = dir + r'/开票明细清单.xlsx'
+    result_file = dir + r'/开票明细清单_%s.xlsx' % now
 
     main(data_file, result_file)
     print("\n计算完成，结果见文件【%s】\n弹窗1分钟后自动关闭，也可手动关闭~" % result_file)
