@@ -41,13 +41,19 @@ def check_weight(rule, weight):
         return True
     elif rule == "<2" and 0 < float(weight) < 2:
         return True
-    elif rule == ">=2" and float(weight) > 2:
+    elif rule == ">=2" and float(weight) >= 2:
         return True
     else:
         return False
 
 
 def check_driver2(rule, driver):
+    '''driver传过来可能是float类型(0.0), 需要做兼容'''
+    try:
+        driver = int(driver)
+    except:
+        pass
+
     rule = str(rule).strip()
     if rule == "":
         if str(driver) == "" or str(driver) == "0":
@@ -138,45 +144,45 @@ def amount_allocate(bill_no, driver_amount, driver2_amount, driver, driver2=None
 
 
 def data_filter_deduplicate(data_frame):
-    '''一张单据号存在多条明细时，只取一条；
-    一张单据号的客户名称可能同时包含葫芦娃和非葫芦娃，此时需要按葫芦娃统计
-
-    1. 客户名称处理：映射一个新列tmp，葫芦娃->1, 没有葫芦娃->0
-                update 客户名称 where 单据号 in ( select 单据号 group by bill_no having sum(tmp)>=1 )
-    2. 整表去重
-    3. select 单据号 from xx group by 单据号 having count(1)>0，校验是否有1个单据号对应多条不同结果的记录，有则打印
-    4. 过滤掉状态为未审核的记录，并打印出来
+    '''一张单据号存在多条明细时，合并一条；合并规则：
+    a. 一张单据号的客户名称可能同时包含葫芦娃和非葫芦娃，此时需要按葫芦娃统计
+    b. 重量需要按多条明细的总和计算
+    c. 其他列默认一张单据号只会有一个记录，默认group by后取max
+    d. 过滤掉状态为未审核的记录，并打印出来
     '''
+
+    def __select_name(group):
+        if '葫芦娃' in group.values:
+            return '葫芦娃'
+        else:
+            return group.max()
+
     try:
-        # ====== [第一步] 客户名称处理 ======
-        # 1. 获取客户名称包含葫芦娃的列，series
-        filter_1 = data_frame['客户名称'].str.contains(r".*葫芦娃.*")
-        # 2. 新增一列tmp, 如果客户名称包含葫芦娃则为1
-        data_frame["tmp"] = np.where(filter_1, 1, 0)
-
-        # 3. 按单据号分组，取tmp的sum值，dataframe
-        aggr_sum = data_frame.groupby("单据号").agg({"tmp": sum})
-        # 4. 过滤出sum>=1的单据号，series
-        filter_2 = aggr_sum[aggr_sum["tmp"] >= 1]
-        # 5. 上述series取index, 如果单据号在这个index list里，则客户名称改为葫芦娃，否则改为其他
-        data_frame["客户名称"] = np.where(data_frame["单据号"].isin(filter_2.index), "葫芦娃", "其他")
-        # 6. 去掉tmp列
-        data_frame = data_frame.drop('tmp', axis=1)
-
-        # ====== [第二步] 整表去重 ======
-        data_frame = data_frame.drop_duplicates()
-        # ====== [第三步] 检查是否有异常记录 ======
-        key_cnt = data_frame.groupby("单据号").size()  # group by 单据号
-        if len(key_cnt[key_cnt > 1]):  # having count(1)>1
-            tmp = key_cnt[key_cnt > 1]  # 返回的是Series列表，直接打印的话最底下有一行name/dtype影响阅读
-            tmp_res = pd.DataFrame({'单据号': tmp.index, '派送次数': tmp.values})  # 因此转成dataframe, 给size列增加名字
-            print("Excel内容异常：如下单据号可能存在多条派送记录，请检查！\n%s" % tmp_res.to_string(index=False))  # 打印时去掉最左侧的默认索引0123
-        # ====== [第四步] 过滤状态为未审核的记录 ======
-        filter_3 = data_frame['状态'] != "已审核"
-        if len(data_frame[filter_3]):
-            tmp_res = data_frame[filter_3][["单据号", "状态"]]
+        # 过滤掉状态为未审核的记录，并打印出来
+        filter = data_frame['状态'] != "已审核"
+        if len(data_frame[filter]):
+            tmp_res = data_frame[filter][["单据号", "状态"]]
             print("Excel内容异常：如下单据号非【已审核】，补贴金额统计为0！\n%s" % tmp_res.to_string(index=False))  # 打印时去掉最左侧的默认索引0123
         data_frame = data_frame[data_frame['状态'] == "已审核"]
+
+        # 按单据号group by, 重量取sum, 其他字段取max
+        result_tmp = data_frame.groupby('单据号').agg({
+            '状态': 'max',
+            '车牌号': 'max',
+            '客户名称': __select_name,
+            '驾驶员': 'max',
+            '驾驶员2': 'max',
+            '回头车拉货': 'max',
+            '送书重量': 'sum',
+            '跟车员1': 'max',
+            '跟车员2': 'max',
+            '跟车员3': 'max',
+            '跟车员4': 'max',
+            '跟车员5': 'max',
+            '跟车员6': 'max'
+        })
+        data_frame = pd.DataFrame(result_tmp).reset_index()
+
     except:
         print("Something error: ", traceback.format_exc())
     finally:
@@ -192,9 +198,10 @@ def main(rule_file, data_file, result_file):
         .to_dict(orient="records")
 
     drive_bill_raw = pd.read_excel(data_file,
-                                   usecols=["状态", "单据号", "车牌号", "客户名称", "驾驶员2", "送书重量", "回头车拉货", "驾驶员",
+                                   usecols=["状态", "单据号", "车牌号", "客户名称", "驾驶员", "驾驶员2", "送书重量", "回头车拉货",
                                             "跟车员1", "跟车员2", "跟车员3", "跟车员4", "跟车员5", "跟车员6"],
-                                   dtype={"送书重量": float}
+                                   dtype={"状态": str, "单据号": str, "车牌号": str, "客户名称": str, "驾驶员": str, "驾驶员2": str, "送书重量": float, "回头车拉货": str,
+                                          "跟车员1": str, "跟车员2": str, "跟车员3": str, "跟车员4": str, "跟车员5": str, "跟车员6": str}
                                    ).dropna(subset=["车牌号"]).fillna({"送书重量": 0}).fillna("")
 
     drive_bill = data_filter_deduplicate(data_frame=drive_bill_raw).to_dict(orient="records")
