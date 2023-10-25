@@ -46,7 +46,7 @@ def data_filter(data_frame):
                               & (data_frame['工单备注'].str.contains(r".*合同编号.*"))
                     ]
         if len_old-len(data_frame) > 0:
-            print("有%s条记录不符合规则(未审核/客户名称不匹配/工单备注为空)，已被过滤" % (len_old-len(data_frame)))
+            print("有%s条记录不符合规则(未审核/客户名称不匹配/工单备注没有合同编号)，已被过滤" % (len_old-len(data_frame)))
     except:
         pass
     finally:
@@ -128,28 +128,27 @@ def get_delivery_info(data_file):
     return delivery_info_list, info_groupby_deliver_no
 
 
-def validate_invoice(delivery_info_list):
+def validate_invoice(info_group):
     """ 校验发票是否成立
     返回True或者False
 
-    规则1: 单张印刷清单的总金额<=10w
-    规则2. 合同编号、单据号、OA单号、SAP单号，四个号的总条数不能超过15条
+    规则1: 单张印刷清单的总金额<=9w
+    (废弃)规则2. 合同编号、单据号、OA单号、SAP单号，四个号的总条数不能超过15条
     规则3. 一张送货单内的内容，只能出现在一个印刷清单中
 
     即：
-    1. group list中，每个子列表的总金额<=10w
-    2. group list中，每个子列表的4个单号去重后的个数<=15
-    3. 一个送货单号不能同时出现在多个子列表里
+    1. 一个送货单号不能同时出现在多个子列表里
+    2. group list中，每个子列表的总金额<=9w
+    否则返回false
     """
     invoice_total_gmv = 0
     invoice_total_bill_no = []
-    for i in delivery_info_list:
+    for i in info_group:
         invoice_total_gmv += float(i["金额"])
         invoice_total_bill_no += list(i["单据号"])
 
-    # 规则1，group list中，每个子列表的总金额<=10w
-    # 规则2，每个子列表的4个单号去重后的个数<=15
-    if invoice_total_gmv > 90000 or len(set(invoice_total_bill_no)) > 15:
+    # if invoice_total_gmv > 90000 or len(set(invoice_total_bill_no)) > 15:
+    if invoice_total_gmv > 90000:
         return False
     else:
         return True
@@ -242,7 +241,7 @@ SAP订单号：
             # 写数据进对应的sheet
             df.to_excel(writer, sheet_name=sheet_name, index=False)
             # 合并备注列，第二个参数是合并后取哪个单元格的内容
-            worksheet.merge_range('H2:H21', df.loc[0, '备注'], merge_format)
+            worksheet.merge_range('H2:H35', df.loc[0, '备注'], merge_format)
             # 设置列宽
             worksheet.set_column('B:B', 40)  # 品名
             worksheet.set_column('H:H', 20)
