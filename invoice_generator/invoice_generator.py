@@ -151,7 +151,6 @@ def validate_invoice(info_group):
     for i in set(invoice_total_bill_no):
         comment_length += len(i)+1
 
-
     # if invoice_total_gmv > 90000 or len(set(invoice_total_bill_no)) > 15:
     # if invoice_total_gmv > 90000:
     # 新增需求：备注不得超过156字符。comment有固定24个字符+4个换行符，这里判断单据号总长度不超过156-24=132字符即可。如果某个单据号为空则可能会出现1字符(换行符)的偏差
@@ -236,14 +235,7 @@ SAP订单号：
         workbook = writer.book
         # format详细文档见 https://xlsxwriter.readthedocs.io/format.html
         merge_format = workbook.add_format({
-            'border': 1,"""合同编号：
-%s
-单据号：
-%s
-OA单号：
-%s
-SAP订单号：%s"""
-
+            'border': 1,
             'align': 'center',
             'valign': 'top'})
         # 遍历不同的发票sheet
