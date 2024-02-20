@@ -43,10 +43,11 @@ def data_filter(data_frame):
         len_old =len(data_frame)
         data_frame = data_frame[(data_frame["审核"] == "是")
                               & (data_frame["客户名称"] == "海南普利制药股份有限公司")
-                              & (data_frame['工单备注'].str.contains(r".*合同编号.*"))
+                              & (data_frame['工单备注'].str.contains(r"合同编号"))
+                              & (data_frame['工单备注'].str.contains(r"单据号|计划单号"))
                     ]
         if len_old-len(data_frame) > 0:
-            print("有%s条记录不符合规则(未审核/客户名称不匹配/工单备注没有合同编号)，已被过滤" % (len_old-len(data_frame)))
+            print("有%s条记录不符合规则(未审核/客户名称不匹配/工单备注缺少合同编号或单据号)，已被过滤" % (len_old-len(data_frame)))
     except:
         pass
     finally:
@@ -56,12 +57,13 @@ def data_filter(data_frame):
 def get_pure_number_list(raw_str_list):
     """单号填写不规范，可能会存在提取到包含、，, 的内容，或者一个字符串包含多个单号，如"2240002224、220002274"，"2240002224, 220002274"
     需要先按、，,分割，然后去掉单号首尾的空格, 去掉空字符串，最后转成set去重
+    -- 20240220更新：英文逗号替换为-，作为一个单号中间的内容，不作为分隔符
     """
     pure_number_list = []
 
     if raw_str_list:
         for raw_str in raw_str_list:
-            tmp = raw_str.replace(",", "、").replace("，", "、").split("、")
+            tmp = raw_str.replace(",", "-").replace("，", "、").split("、")
             for i in tmp:
                 if i:   # 空字符串则忽略
                     pure_number_list.append(i)
@@ -96,20 +98,20 @@ def get_delivery_info(data_file):
         info = delivery_info_list[i]
         comment = str(info["工单备注"])
 
-        contract_list = re.findall(r'合同编号.+?([0-9、，, ]{5,50})', comment)
+        contract_list = re.findall(r'合同编号.+?([0-9、，, -]{5,50})', comment)
         contract_no = get_pure_number_list(contract_list)
         delivery_info_list[i]["合同编号"] = contract_no
 
         # 单据号在备注里可能叫计划号，这里的(?:计划号|单据号)代表二选一匹配两个完整的词，但是最后选出的是后面括号中的数字；?:用来忽略本身的括号，以避免和后面真正要匹配的字符混淆
-        bill_list = re.findall(r'(?:计划号|单据号).+?([0-9、，, ]{5,100})', comment)
+        bill_list = re.findall(r'(?:计划号|单据号|计划单号).+?([0-9、，, -]{5,100})', comment)
         bill_no = get_pure_number_list(bill_list)
         delivery_info_list[i]["单据号"] = bill_no
 
-        OA_list = re.findall(r'OA单号.+?([0-9、，, ]{5,50})', comment)
+        OA_list = re.findall(r'OA单号.+?([0-9、，, -]{5,50})', comment)
         OA_no = get_pure_number_list(OA_list)
         delivery_info_list[i]["OA单号"] = OA_no
 
-        SAP_list = re.findall(r'SAP订单号.+?([0-9、，, ]{5,50})', comment)
+        SAP_list = re.findall(r'SAP订单号.+?([0-9、，, -]{5,50})', comment)
         SAP_no = get_pure_number_list(SAP_list)
         delivery_info_list[i]["SAP订单号"] = SAP_no
 
