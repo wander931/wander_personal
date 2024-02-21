@@ -57,13 +57,12 @@ def data_filter(data_frame):
 def get_pure_number_list(raw_str_list):
     """单号填写不规范，可能会存在提取到包含、，, 的内容，或者一个字符串包含多个单号，如"2240002224、220002274"，"2240002224, 220002274"
     需要先按、，,分割，然后去掉单号首尾的空格, 去掉空字符串，最后转成set去重
-    -- 20240220更新：英文逗号替换为-，作为一个单号中间的内容，不作为分隔符
     """
     pure_number_list = []
 
     if raw_str_list:
         for raw_str in raw_str_list:
-            tmp = raw_str.replace(",", "-").replace("，", "、").split("、")
+            tmp = raw_str.replace(",", "、").replace("，", "、").split("、")
             for i in tmp:
                 if i:   # 空字符串则忽略
                     pure_number_list.append(i)
