@@ -248,7 +248,7 @@ SAP订单号：
             # 写数据进对应的sheet
             df.to_excel(writer, sheet_name=sheet_name, index=False)
             # 合并备注列，第二个参数是合并后取哪个单元格的内容
-            worksheet.merge_range('H2:H35', df.loc[0, '备注'], merge_format)
+            worksheet.merge_range('H2:H20', df.loc[0, '备注'], merge_format)
             # 设置列宽
             worksheet.set_column('B:B', 40)  # 品名
             worksheet.set_column('H:H', 20)
