@@ -67,7 +67,7 @@ def get_pure_number_list(raw_str_list):
 
     if raw_str_list:
         for raw_str in raw_str_list:
-            tmp = raw_str.replace(",", "、").replace("，", "、").split("、")
+            tmp = raw_str.replace(",", "、").replace("，", "、").strip().split("、")
             for i in tmp:
                 if i:   # 空字符串则忽略
                     pure_number_list.append(i)
@@ -370,7 +370,7 @@ SAP订单号：
 if __name__ == "__main__":
     now = time.strftime('%Y%m%d_%H_%M_%S', time.localtime(int(time.time())))
 
-    data_file = dir + r'/销售对账明细.xlsx'
+    data_file = dir + r'/销售对账明细_XSDZ25090001.xlsx'
     # result_file = dir + r'/印刷清单_%s.xlsx' % now
     result_file = dir + r'/开票明细清单_%s.xlsx' % now
 
